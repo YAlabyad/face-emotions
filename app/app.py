@@ -3,21 +3,21 @@ from keras.models import load_model
 import cv2
 import numpy as np
 import os
-
 # Load models
-detection_model_path = os.getenv('HAARCASCAD_PATH')
-emotion_model_path = os.getenv('MODEL_PATH')
+detection_model_path = os.getenv('HAARCASCADE_PATH', 'haarcascade_frontalface_default.xml')
+emotion_model_path = os.getenv('MODEL_PATH', 'my_model.h5')
 face_detection = cv2.CascadeClassifier(detection_model_path)
 emotion_classifier = load_model(emotion_model_path, compile=False)
 EMOTIONS = ["anger", "contempt", "disgust", "fear", "happy", "sadness", "surprise"]
 
-
 def process_image(frame):
+    # Convert to grayscale and detect faces
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     faces = face_detection.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
 
     if len(faces) > 0:
-        faces = sorted(faces, reverse=True)[0]
+        # Get largest face
+        faces = sorted(faces, reverse=True, key=lambda x: (x[2] - x[0]) * (x[3] - x[1]))[0]
         (fX, fY, fW, fH) = faces
 
         # Extract and preprocess ROI
@@ -31,12 +31,12 @@ def process_image(frame):
         preds = emotion_classifier.predict(roi)[0]
         label = EMOTIONS[preds.argmax()]
 
-        # Draw bounding box and label
-        cv2.putText(frame, label, (fX, fY - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
-        cv2.rectangle(frame, (fX, fY), (fX + fW, fY + fH), (0, 0, 255), 2)
+        # Draw bounding box and label (with larger text)
+        cv2.rectangle(frame, (fX, fY), (fX + fW, fY + fH), (0, 255, 0), 3)  # Thicker green box
+        cv2.putText(frame, label, (fX, fY - 10), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 255, 0), 3)  # Larger text
 
     return frame
-
 
 def from_image_file(img_path):
     frame = cv2.imread(img_path)
@@ -44,28 +44,42 @@ def from_image_file(img_path):
         print(f"Error: Could not read image at {img_path}")
         return
 
+    # Resize small images
+    height, width = frame.shape[:2]
+    if width < 800 or height < 600:
+        frame = cv2.resize(frame, (800, 600))
+
     processed = process_image(frame)
+    
+    # Create resizable window
+    cv2.namedWindow('Emotion Detection', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('Emotion Detection', 800, 600)
     cv2.imshow('Emotion Detection', processed)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
-
 def from_webcam():
     cap = cv2.VideoCapture(0)
+    
+    # Set up resizable window
+    cv2.namedWindow('Emotion Detection (Press Q to quit)', cv2.WINDOW_NORMAL)
+    cv2.resizeWindow('Emotion Detection (Press Q to quit)', 800, 600)
+    
     while True:
         ret, frame = cap.read()
         if not ret:
             break
 
+        # Resize webcam frame if needed
+        frame = cv2.resize(frame, (800, 600))
         processed = process_image(frame)
+        
         cv2.imshow('Emotion Detection (Press Q to quit)', processed)
-
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     cap.release()
     cv2.destroyAllWindows()
-
 
 # --- Main Program ---
 print("Choose input method:")
