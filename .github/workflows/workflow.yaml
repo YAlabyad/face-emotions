@@ -1,4 +1,4 @@
-name: AI-CI
+name: AICI
 
 on:
   push:
@@ -13,7 +13,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: 3.11
-      - run: pip install -r req.txt
+      - run: pip install -r app/req.txt
 
   deploy-to-docker:
     needs: test
